@@ -1,0 +1,54 @@
+@gabrielsapo       ← Follow me if you want to discuss/ask Meteor stuff :)
+
+These days some people were discussing at meteor-talk group about running Meteor at Windows and I’ve recommended them using Vagrant. It’s a very developer-friendly piece of software that creates a virtual machine (VM) which let you run any operating system wanted and connect to it without big efforts of configuration (just make the initial installation and you have it working).
+
+Many packages (I've tested) for running Meteor+Vagrant fails because Meteor writes its mongodb file and also other files inside local build folder into a shared folder between the Windows host and the Linux guest, and it simply does not work. So I've put my brain to work and found a solution: do symlinks inside the VM (but do not use ln. Use mount so git can follow it). It’s covered on steps 8 to 15.
+
+If you have no idea what I’m talking about, I’ve made a tutorial to install Ubuntu Precise x86 through Windows command-line with Meteor very simple to follow:
+
+Requirements
+
+•	Download VirtualBox: https://www.virtualbox.org/wiki/Downloads (Vagrant runs on top of VirtualBox, so you need it)
+•	Download latest Vagrant: http://downloads.vagrantup.com/
+•	Download git: http://git-scm.com/download/win (It will install ssh binaries required by Vagrant and let you connect to the VM)
+•	Create a folder to store your Vagrant files + Meteor project
+•	Download this script and save it as meteor.sh into that folder: https://gist.github.com/gabrielhpugliese/5471763/raw/6bc6f616842c75669d1c6f28ce7cd714fa28967e/meteor.sh
+
+Steps on Windows command-line:
+1.	Go to Start Menu > Type cmd > SHIFT + ENTER (to login as Administrator)
+2.	cd C:\path\to\your\vagrant+meteor\project\folder
+3.	set PATH=%PATH%;C:\Program Files (x86)\Git\bin (Append git binaries to path so vagrant can run ssh)
+4.	vagrant init precise32 http://files.vagrantup.com/precise32.box (To install Ubuntu 10.04 x86)
+5.	Edit the Vagrantfile with your preferred editor and add those two lines anywhere inside the Vagrant.configure(“2”) block:
+config.vm.provision :shell, :path => "meteor.sh"
+config.vm.network :forwarded_port, guest: 3000, host: 3000
+config.vm.provider "virtualbox" do |v|
+   v.customize ["setextradata", :id, "VBoxInternal2/SharedFoldersEnableSymlinksCreate/v-root", "1"]
+end
+6.	vagrant up (It will download box, configure meteor and get it up)
+7.	vagrant ssh (It will connect on the VM and expose its command-line)
+Now that you are inside the VM command-line, you can use it as your server:
+
+Steps on Ubuntu command-line:
+8.	cd /vagrant (This is by default shared with the host)
+9.	mrt create ~/meteorapp
+10.	mrt create meteorapp && cd meteorapp && rm -rf .meteor && mkdir .meteor/ (Check your Windows folder you’ve created. It will be there!)
+11.	sudo mount --bind /home/vagrant/meteorapp/.meteor/ /vagrant/meteorapp/.meteor/
+12.	echo “/home/vagrant/meteorapp/.meteor/ /vagrant/meteorapp/.meteor/ bind defaults,bind 0 0” | sudo tee -a /etc/fstab (This will bind a task to do step 12 every time you reload the VM) This actually freezes your boot because /vagrant/ folder isn’t mounted yet. A workaround is doing:
+13.	echo “sudo mount --bind /home/vagrant/meteorapp/.meteor/ /vagrant/meteorapp/.meteor/” >> ~/.bashrc && source ~/.bashrc
+14.	mrt run
+15.	Go to localhost:3000 in Windows browser and see it running! :)
+
+The point here is to use the .meteor folder of your app pointing to another place inside the VM (run ls -la .meteor/ on command-line and you will see the symbolic link), so Meteor uses the VM folder, not Windows folder, and won’t have permissions problems. You will also need to do all git flow inside Ubuntu command-line, because Windows can’t follow those links.
+
+Hints:
+•	Make sure you do version control INSIDE THE VM, so the software can follow the symlink.
+•	To halt a vagrant VM: vagrant halt
+•	To restart a vagrant VM without running all Meteor installation again: vagrant reload --no-provision or just remove the shell path you’ve put on Vagrantfile on line 10.
+•	To destroy a VM: vagrant destroy
+
+That’s it. I know it can be improved with chef/puppet or whatever, but this is very simple steps that you can do in less than 30min if you have a fast connection.
+
+Hope you like it,
+Gabriel Pugliese
+@gabrielsapo
